@@ -7,3 +7,9 @@
 [submodule "scripts/deploy/minirun"]
 	path = scripts/deploy/minirun
 	url = https://github.com/Determinant/minirun.git
+[submodule "rse-merkle/PicoSHA2"]
+	path = rse-merkle/PicoSHA2
+	url = https://github.com/okdshin/PicoSHA2.git
+[submodule "rse-merkle/leopard"]
+	path = rse-merkle/leopard
+	url = https://github.com/catid/leopard.git

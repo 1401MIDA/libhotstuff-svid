@@ -22,6 +22,31 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/salticidae/cmake
 add_subdirectory(salticidae)
 include_directories(salticidae/include)
 
+add_subdirectory(rse-merkle)
+include_directories(rse-merkle)
+include_directories(rse-merkle/leopard)
+include_directories(rse-merkle/leopard/sse2neon)
+include_directories(rse-merkle/leopard/sse2neon/tests)
+
+include_directories(rse-merkle/PicoSHA2)
+
+set(RSELIB
+rse-merkle/leopard/leopard.cpp
+rse-merkle/leopard/leopard.h
+rse-merkle/leopard/LeopardCommon.cpp
+rse-merkle/leopard/LeopardCommon.h
+rse-merkle/leopard/LeopardFF16.cpp
+rse-merkle/leopard/LeopardFF16.h
+rse-merkle/leopard/LeopardFF8.cpp
+rse-merkle/leopard/LeopardFF8.h
+rse-merkle/RSE.cpp
+rse-merkle/RSE.h
+rse-merkle/MerkleTree.cpp
+rse-merkle/MerkleTree.h
+rse-merkle/ShardsContainer.cpp
+rse-merkle/ShardsContainer.h
+)
+
 find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
 
@@ -90,10 +115,12 @@ endif()
 
 # build tools
 add_executable(hotstuff-keygen
+    ${RSELIB}
     src/hotstuff_keygen.cpp)
 target_link_libraries(hotstuff-keygen hotstuff_static)
 
 add_executable(hotstuff-tls-keygen
+    ${RSELIB}
     src/hotstuff_tls_keygen.cpp)
 target_link_libraries(hotstuff-tls-keygen hotstuff_static)
 

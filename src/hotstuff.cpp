@@ -416,6 +416,9 @@ HotStuffBase::~HotStuffBase() {}
 void HotStuffBase::start(
         std::vector<std::tuple<NetAddr, pubkey_bt, uint256_t>> &&replicas,
         bool ec_loop) {
+    LOG_INFO("Raplica size: %d", replicas.size());
+    rse.set_params(replicas.size());
+    LOG_INFO("rse set: %s", rse.print().c_str());
     for (size_t i = 0; i < replicas.size(); i++)
     {
         auto &addr = std::get<0>(replicas[i]);

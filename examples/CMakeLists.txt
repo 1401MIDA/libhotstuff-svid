@@ -18,8 +18,25 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-add_executable(hotstuff-app hotstuff_app.cpp)
+set(RSELIB
+../rse-merkle/leopard/leopard.cpp
+../rse-merkle/leopard/leopard.h
+../rse-merkle/leopard/LeopardCommon.cpp
+../rse-merkle/leopard/LeopardCommon.h
+../rse-merkle/leopard/LeopardFF16.cpp
+../rse-merkle/leopard/LeopardFF16.h
+../rse-merkle/leopard/LeopardFF8.cpp
+../rse-merkle/leopard/LeopardFF8.h
+../rse-merkle/RSE.cpp
+../rse-merkle/RSE.h
+../rse-merkle/MerkleTree.cpp
+../rse-merkle/MerkleTree.h
+../rse-merkle/ShardsContainer.cpp
+../rse-merkle/ShardsContainer.h
+)
+
+add_executable(hotstuff-app ${RSELIB} hotstuff_app.cpp)
 target_link_libraries(hotstuff-app hotstuff_static)
 
-add_executable(hotstuff-client hotstuff_client.cpp)
+add_executable(hotstuff-client ${RSELIB} hotstuff_client.cpp)
 target_link_libraries(hotstuff-client hotstuff_static)

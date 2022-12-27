@@ -22,6 +22,10 @@
 #include <set>
 #include <unordered_map>
 
+#include "rse-merkle/RSE.h"
+#include "rse-merkle/MerkleTree.h"
+#include "rse-merkle/ShardsContainer.h"
+
 #include "hotstuff/promise.hpp"
 #include "hotstuff/type.h"
 #include "hotstuff/entity.h"
@@ -69,6 +73,7 @@ class HotStuffCore {
 
     public:
     BoxObj<EntityStorage> storage;
+    RSE rse;
 
     HotStuffCore(ReplicaID id, privkey_bt &&priv_key);
     virtual ~HotStuffCore() {

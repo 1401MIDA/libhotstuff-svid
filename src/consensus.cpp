@@ -41,6 +41,12 @@ HotStuffCore::HotStuffCore(ReplicaID id,
         vote_disabled(false),
         id(id),
         storage(new EntityStorage()) {
+                    
+            if (RSE::init() != 0) {
+                throw std::runtime_error("leo_init failed.");
+            }
+            LOG_PROTO("leo_init success.");
+        LOG_PROTO("%s", rse.print().c_str());
     storage->add_blk(b0);
 }
 
@@ -169,6 +175,27 @@ block_t HotStuffCore::on_propose(const std::vector<uint256_t> &cmds,
     bnew->self_qc = create_quorum_cert(bnew_hash);
     on_deliver_blk(bnew);
     update(bnew);
+    
+    vector<uint8_t> encode_input;
+    vector<uint8_t> tmp;
+    for(size_t i = 0; i < cmds.size(); i++){
+        tmp = cmds[i].to_bytes();
+        encode_input.insert(encode_input.end(), tmp.begin(), tmp.end());
+        LOG_PROTO("cmds %d, len %d", i, tmp.size());
+    }
+    LOG_PROTO("encode_input size %d", encode_input.size());
+    
+    // Encode
+
+    vector<vector<uint8_t>> encode_output;
+    if (rse.encode(encode_input, encode_output) != 0) {
+        throw std::runtime_error("encode error");
+    }
+
+    MerkleTree mt(encode_output);
+    vector<MerkleProof> proofs = mt.proofs();
+    LOG_PROTO("create %d proofs", proofs.size());
+
     Proposal prop(id, bnew, nullptr);
     LOG_PROTO("propose %s", std::string(*bnew).c_str());
     if (bnew->height <= vheight)
