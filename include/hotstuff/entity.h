@@ -58,6 +58,7 @@ struct ReplicaInfo {
 
 class ReplicaConfig {
     std::unordered_map<ReplicaID, ReplicaInfo> replica_map;
+    std::unordered_map<salticidae::PeerId, ReplicaID> peerid_map;
 
     public:
     size_t nreplicas;
@@ -67,6 +68,7 @@ class ReplicaConfig {
 
     void add_replica(ReplicaID rid, const ReplicaInfo &info) {
         replica_map.insert(std::make_pair(rid, info));
+        peerid_map.insert(std::make_pair(info.peer_id, rid));
         nreplicas++;
     }
 
@@ -84,6 +86,14 @@ class ReplicaConfig {
 
     const salticidae::PeerId &get_peer_id(ReplicaID rid) const {
         return get_info(rid).peer_id;
+    }
+
+    const ReplicaID &get_rid(salticidae::PeerId peer_id) const {
+        auto it = peerid_map.find(peer_id);
+        if (it == peerid_map.end())
+            throw HotStuffError("peer id %s not found",
+                    get_hex(peer_id).c_str());
+        return it->second;
     }
 };
 

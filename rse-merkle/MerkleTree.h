@@ -12,17 +12,24 @@
 
 using namespace std;
 
-#define EMPTY_HASH "00000000000000000000000000000000"
+#define EMPTY_HASH "0000000000000000000000000000000000000000000000000000000000000000"
 
 string hash_2_leaf(string left, string right);
 
 class MerkleProof {
-private:
+public:
     vector<uint8_t> m_data;
     int m_index;
     string m_root_hash;
     vector<string> m_branch;
-public:
+
+    MerkleProof() {
+        m_index = 0;
+        m_branch = std::vector<string>();
+        m_data = std::vector<uint8_t>();
+        m_root_hash = EMPTY_HASH;
+    }
+    
     MerkleProof(vector<uint8_t> data, int index, string root, vector<string> branch);
     void print_proof();
     bool validate();

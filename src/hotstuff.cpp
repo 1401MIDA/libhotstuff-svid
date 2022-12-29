@@ -383,6 +383,17 @@ void HotStuffBase::do_broadcast_proposal(const Proposal &prop) {
     //    pn.send_msg(prop_msg, replica);
 }
 
+void HotStuffBase::do_broadcast_proposal_with_slice(const std::vector<Proposal> &props) {
+    //MsgPropose prop_msg(prop);
+    // pn.multicast_msg(MsgPropose(prop), peers);
+    //for (const auto &replica: peers)
+    //    pn.send_msg(prop_msg, replica);
+    for(auto peer: peers) {
+        auto rid = get_config().get_rid(peer);
+        pn.send_msg(MsgPropose(props[rid]), peer);
+    }
+}
+
 void HotStuffBase::do_vote(ReplicaID last_proposer, const Vote &vote) {
     pmaker->beat_resp(last_proposer)
             .then([this, vote](ReplicaID proposer) {

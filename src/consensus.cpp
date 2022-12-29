@@ -195,16 +195,25 @@ block_t HotStuffCore::on_propose(const std::vector<uint256_t> &cmds,
     MerkleTree mt(encode_output);
     vector<MerkleProof> proofs = mt.proofs();
     LOG_PROTO("create %d proofs", proofs.size());
-
-    Proposal prop(id, bnew, nullptr);
+    std::vector<Proposal> props;
+    for(auto proof: proofs) {
+        Slice slice(proof);
+        LOG_PROTO("slice %d <%s>", slice.m_index, std::string(slice).c_str());
+        Proposal prop(id, slice, bnew, nullptr);
+        props.emplace_back(prop);
+    }
+    // Slice slice(proofs[1]);
+    // Proposal prop(id, slice, bnew, nullptr);
     LOG_PROTO("propose %s", std::string(*bnew).c_str());
     if (bnew->height <= vheight)
         throw std::runtime_error("new block should be higher than vheight");
     /* self-receive the proposal (no need to send it through the network) */
-    on_receive_proposal(prop);
-    on_propose_(prop);
+    on_receive_proposal(props[get_id()]);
+    on_propose_(props[get_id()]);
     /* boradcast to other replicas */
-    do_broadcast_proposal(prop);
+    // do_broadcast_proposal(prop);
+    do_broadcast_proposal_with_slice(props);
+    
     return bnew;
 }
 

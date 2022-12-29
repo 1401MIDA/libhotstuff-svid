@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(rse_merkel)
+project(rse_merkle)
 
 set(CMAKE_CXX_STANDARD 14)
 set(LEOPARDLIB

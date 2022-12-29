@@ -125,6 +125,7 @@ class HotStuffCore {
      * The user should send the proposal message to all replicas except for
      * itself. */
     virtual void do_broadcast_proposal(const Proposal &prop) = 0;
+    virtual void do_broadcast_proposal_with_slice(const std::vector<Proposal> &prop) = 0;
     /** Called upon sending out a new vote to the next proposer.  The user
      * should send the vote message to a *good* proposer to have good liveness,
      * while safety is always guaranteed by HotStuffCore. */
@@ -172,9 +173,93 @@ class HotStuffCore {
     void set_vote_disabled(bool f) { vote_disabled = f; }
 };
 
+struct Slice: public MerkleProof {
+    Slice() {}
+    Slice(MerkleProof proof) {
+        m_index = proof.m_index;
+        m_data = proof.m_data;
+        m_root_hash = proof.m_root_hash;
+        m_branch = proof.m_branch;
+    }
+
+    void serialize(DataStream &s) const {
+        s << htole((uint32_t)m_data.size()) << m_data;
+        s << m_index;
+        
+        uint32_t hash_size = m_root_hash.size();
+        std::vector<uint8_t> hash((uint8_t*)m_root_hash.c_str(), (uint8_t*)m_root_hash.c_str()+hash_size);
+        s << htole((uint32_t)hash.size()) << hash;
+        
+        uint32_t branch_size = m_branch.size();
+        uint32_t total_size = 0;
+        std::vector<uint8_t> branch;
+        for(auto b : m_branch) {
+            assert(b.size() == 64);
+            total_size += 64;
+            std::vector<uint8_t> tmp_branch((uint8_t*)b.c_str(), (uint8_t*)b.c_str()+64);
+            branch.insert(branch.end(),tmp_branch.begin(), tmp_branch.end());
+        }
+        assert(total_size == branch.size());
+        assert(total_size == branch_size*64);
+
+        s << htole(total_size) << branch;
+        
+    }
+
+    void unserialize(DataStream &s) {
+        uint32_t n;
+        s >> n;
+        n = letoh(n);
+        if (n == 0)
+            m_data.clear();
+        else {
+            auto base = s.get_data_inplace(n);
+            m_data = bytearray_t(base, base + n);
+        }
+        s >> m_index;
+
+        s >> n;
+        n = letoh(n);
+        if (n == 0)
+            m_root_hash="";
+        else {
+            auto base = s.get_data_inplace(n);
+            std::vector<uint8_t> hash = bytearray_t(base, base + n);
+            string h(hash.begin(), hash.end());
+            m_root_hash = h;
+        }
+
+        s >> n;
+        n = letoh(n);
+        if (n == 0)
+            m_branch.clear();
+        else {
+            auto base = s.get_data_inplace(n);
+            std::vector<uint8_t> branch = bytearray_t(base, base + n);
+            unsigned branch_size = n / 64;
+            assert(n%64 == 0);
+            string b(branch.begin(), branch.end());
+            m_branch.clear();
+            for(unsigned i=0; i<branch_size; i++){
+                m_branch.emplace_back(b.substr(i*64,64));
+            }
+        }
+
+    }
+
+    operator std::string () const {
+        DataStream s;
+        s << "<slice " << std::to_string(m_index) << " "
+          << get_hex10(salticidae::get_hash(*this)) 
+          << ">";
+        return s;
+    }
+};
+
 /** Abstraction for proposal messages. */
 struct Proposal: public Serializable {
     ReplicaID proposer;
+    Slice slice;
     /** block being proposed */
     block_t blk;
     /** handle of the core object to allow polymorphism. The user should use
@@ -183,19 +268,22 @@ struct Proposal: public Serializable {
 
     Proposal(): blk(nullptr), hsc(nullptr) {}
     Proposal(ReplicaID proposer,
+            Slice slice,
             const block_t &blk,
             HotStuffCore *hsc):
         proposer(proposer),
+        slice(slice),
         blk(blk), hsc(hsc) {}
 
     void serialize(DataStream &s) const override {
         s << proposer
+          << slice
           << *blk;
     }
 
     void unserialize(DataStream &s) override {
         assert(hsc != nullptr);
-        s >> proposer;
+        s >> proposer >> slice;
         Block _blk;
         _blk.unserialize(s, hsc);
         blk = hsc->storage->add_blk(std::move(_blk), hsc->get_config());
@@ -203,8 +291,20 @@ struct Proposal: public Serializable {
 
     operator std::string () const {
         DataStream s;
+        // s << "<proposal "
+        //   << "rid=" << std::to_string(proposer) << " "
+        //   << "slice_index=" << std::to_string(slice.m_index) << " "
+        //   << "slice_data=";
+        // for(auto d : slice.m_data) {
+        //     s << std::to_string(d);
+        // }
+        // s << " "
+        //   << "slice_root_hash=" << slice.m_root_hash << " "
+        //   << "blk=" << get_hex10(blk->get_hash()) << ">";
+
         s << "<proposal "
           << "rid=" << std::to_string(proposer) << " "
+          << "slice=" << get_hex10(salticidae::get_hash(slice)) << " "
           << "blk=" << get_hex10(blk->get_hash()) << ">";
         return s;
     }
