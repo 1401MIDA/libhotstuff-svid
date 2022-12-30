@@ -78,6 +78,16 @@ struct MsgRespBlock {
     void postponed_parse(HotStuffCore *hsc);
 };
 
+struct MsgSlice {
+    static const opcode_t opcode = 0x4;
+    DataStream serialized;
+    uint256_t hash;
+    Slice slice;
+    MsgSlice(const Slice &);
+    MsgSlice(DataStream &&s): serialized(std::move(s)) {}
+    void postponed_parse();
+};
+
 using promise::promise_t;
 
 class HotStuffBase;
@@ -190,9 +200,12 @@ class HotStuffBase: public HotStuffCore {
     inline void req_blk_handler(MsgReqBlock &&, const Net::conn_t &);
     /** receives a block */
     inline void resp_blk_handler(MsgRespBlock &&, const Net::conn_t &);
+    /**  deliver consensus message: <slice>*/
+    inline void slice_handler(MsgSlice &&, const Net::conn_t &);
 
     inline bool conn_handler(const salticidae::ConnPool::conn_t &, bool);
 
+    void do_broadcast_slice(const Slice &) override;
     void do_broadcast_proposal(const Proposal &) override;
     void do_broadcast_proposal_with_slice(const std::vector<Proposal> &) override;
     void do_vote(ReplicaID, const Vote &) override;

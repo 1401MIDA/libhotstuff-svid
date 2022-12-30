@@ -33,6 +33,7 @@
 
 namespace hotstuff {
 
+struct Slice;
 struct Proposal;
 struct Vote;
 struct Finality;
@@ -74,6 +75,7 @@ class HotStuffCore {
     public:
     BoxObj<EntityStorage> storage;
     RSE rse;
+    ShardsContainer sc;
 
     HotStuffCore(ReplicaID id, privkey_bt &&priv_key);
     virtual ~HotStuffCore() {
@@ -104,6 +106,9 @@ class HotStuffCore {
      * The block mentioned in the message should be already delivered. */
     void on_receive_vote(const Vote &vote);
 
+    /** Call upon the delivery of a slice message.*/
+    void on_receive_slice(const Slice &slice);
+
     /** Call to submit new commands to be decided (executed). "Parents" must
      * contain at least one block, and the first block is the actual parent,
      * while the others are uncles/aunts */
@@ -124,6 +129,7 @@ class HotStuffCore {
     /** Called by HotStuffCore upon broadcasting a new proposal.
      * The user should send the proposal message to all replicas except for
      * itself. */
+    virtual void do_broadcast_slice(const Slice &slice) = 0;
     virtual void do_broadcast_proposal(const Proposal &prop) = 0;
     virtual void do_broadcast_proposal_with_slice(const std::vector<Proposal> &prop) = 0;
     /** Called upon sending out a new vote to the next proposer.  The user
@@ -174,17 +180,20 @@ class HotStuffCore {
 };
 
 struct Slice: public MerkleProof {
+    uint256_t m_blk_hash;
+
     Slice() {}
-    Slice(MerkleProof proof) {
+    Slice(MerkleProof proof, uint256_t blk_hash) {
         m_index = proof.m_index;
         m_data = proof.m_data;
         m_root_hash = proof.m_root_hash;
         m_branch = proof.m_branch;
+        m_blk_hash = blk_hash;
     }
 
     void serialize(DataStream &s) const {
         s << htole((uint32_t)m_data.size()) << m_data;
-        s << m_index;
+        s << m_index << m_blk_hash;
         
         uint32_t hash_size = m_root_hash.size();
         std::vector<uint8_t> hash((uint8_t*)m_root_hash.c_str(), (uint8_t*)m_root_hash.c_str()+hash_size);
@@ -216,7 +225,7 @@ struct Slice: public MerkleProof {
             auto base = s.get_data_inplace(n);
             m_data = bytearray_t(base, base + n);
         }
-        s >> m_index;
+        s >> m_index >> m_blk_hash;
 
         s >> n;
         n = letoh(n);
@@ -250,7 +259,8 @@ struct Slice: public MerkleProof {
     operator std::string () const {
         DataStream s;
         s << "<slice " << std::to_string(m_index) << " "
-          << get_hex10(salticidae::get_hash(*this)) 
+          << get_hex10(salticidae::get_hash(*this)) << " "
+          << "blk=" << get_hex10(m_blk_hash)
           << ">";
         return s;
     }
@@ -259,6 +269,7 @@ struct Slice: public MerkleProof {
 /** Abstraction for proposal messages. */
 struct Proposal: public Serializable {
     ReplicaID proposer;
+    uint256_t s_hash;
     Slice slice;
     /** block being proposed */
     block_t blk;
@@ -273,17 +284,20 @@ struct Proposal: public Serializable {
             HotStuffCore *hsc):
         proposer(proposer),
         slice(slice),
-        blk(blk), hsc(hsc) {}
+        blk(blk), hsc(hsc) {
+            s_hash = salticidae::get_hash(slice);
+        }
 
     void serialize(DataStream &s) const override {
         s << proposer
+          << s_hash
           << slice
           << *blk;
     }
 
     void unserialize(DataStream &s) override {
         assert(hsc != nullptr);
-        s >> proposer >> slice;
+        s >> proposer >> s_hash >> slice;
         Block _blk;
         _blk.unserialize(s, hsc);
         blk = hsc->storage->add_blk(std::move(_blk), hsc->get_config());

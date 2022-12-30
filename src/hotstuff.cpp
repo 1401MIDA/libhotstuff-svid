@@ -75,6 +75,12 @@ void MsgRespBlock::postponed_parse(HotStuffCore *hsc) {
     }
 }
 
+const opcode_t MsgSlice::opcode;
+MsgSlice::MsgSlice(const Slice &slice) { 
+    hash = salticidae::get_hash(slice);
+    serialized << hash << slice; }
+void MsgSlice::postponed_parse() { serialized >> hash >> slice; }
+
 // TODO: improve this function
 void HotStuffBase::exec_command(uint256_t cmd_hash, commit_cb_t callback) {
     cmd_pending.enqueue(std::make_pair(cmd_hash, callback));
@@ -259,6 +265,19 @@ void HotStuffBase::resp_blk_handler(MsgRespBlock &&msg, const Net::conn_t &) {
         if (blk) on_fetch_blk(blk);
 }
 
+void HotStuffBase::slice_handler(MsgSlice &&msg, const Net::conn_t &conn) {
+    const PeerId &peer = conn->get_peer_id();
+    if (peer.is_null()) return;
+    msg.postponed_parse();
+    auto &slice = msg.slice;
+    if (msg.hash != salticidae::get_hash(slice))
+    {
+        LOG_WARN("invalid slice from %d", get_config().get_rid(peer));
+        return;
+    }
+    on_receive_slice(std::move(slice));
+}
+
 bool HotStuffBase::conn_handler(const salticidae::ConnPool::conn_t &conn, bool connected) {
     if (connected)
     {
@@ -364,6 +383,7 @@ HotStuffBase::HotStuffBase(uint32_t blk_size,
     pn.reg_handler(salticidae::generic_bind(&HotStuffBase::vote_handler, this, _1, _2));
     pn.reg_handler(salticidae::generic_bind(&HotStuffBase::req_blk_handler, this, _1, _2));
     pn.reg_handler(salticidae::generic_bind(&HotStuffBase::resp_blk_handler, this, _1, _2));
+    pn.reg_handler(salticidae::generic_bind(&HotStuffBase::slice_handler, this, _1, _2));
     pn.reg_conn_handler(salticidae::generic_bind(&HotStuffBase::conn_handler, this, _1, _2));
     pn.reg_error_handler([](const std::exception_ptr _err, bool fatal, int32_t async_id) {
         try {
@@ -374,6 +394,10 @@ HotStuffBase::HotStuffBase(uint32_t blk_size,
     });
     pn.start();
     pn.listen(listen_addr);
+}
+
+void HotStuffBase::do_broadcast_slice(const Slice &slice) {
+    pn.multicast_msg(MsgSlice(slice), peers);
 }
 
 void HotStuffBase::do_broadcast_proposal(const Proposal &prop) {
@@ -429,7 +453,9 @@ void HotStuffBase::start(
         bool ec_loop) {
     LOG_INFO("Raplica size: %d", replicas.size());
     rse.set_params(replicas.size());
-    LOG_INFO("rse set: %s", rse.print().c_str());
+    LOG_INFO("%s", rse.print().c_str());
+    sc.set_pramas(replicas.size());
+    LOG_INFO("%s", sc.print().c_str());
     for (size_t i = 0; i < replicas.size(); i++)
     {
         auto &addr = std::get<0>(replicas[i]);

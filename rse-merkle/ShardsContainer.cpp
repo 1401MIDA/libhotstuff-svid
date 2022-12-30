@@ -4,6 +4,10 @@ ShardsContainer::ShardsContainer(unsigned node_num) {
     m_nodenum = node_num;
     m_threshold = node_num - (node_num - 1) / 3;
 }
+void ShardsContainer::set_pramas(unsigned node_num) {
+    m_nodenum = node_num;
+    m_threshold = node_num - (node_num - 1) / 3;
+}
 
 int ShardsContainer::new_block(string hash) {
     if(m_shards.count(hash) != 0) {
@@ -44,4 +48,12 @@ int ShardsContainer::remove(string hash) {
         return -1;
     }
     return 0;
+}
+
+string ShardsContainer::print() {
+    string s="sc pramas: m_nodenum = ";
+    s+= to_string(m_nodenum);
+    s+= ", m_threshold = ";
+    s+= to_string(m_threshold);
+    return s;
 }

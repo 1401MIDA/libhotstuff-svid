@@ -91,7 +91,7 @@ void MerkleProof::print_proof() {
     cout << endl;
 }
 
-bool MerkleProof::validate() {
+bool MerkleProof::validate() const {
     string cur_hash = picosha2::hash256_hex_string(m_data);
     int cur_index = m_index;
     for(int i=0; i<m_branch.size(); i++) {

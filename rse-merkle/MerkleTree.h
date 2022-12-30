@@ -32,7 +32,7 @@ public:
     
     MerkleProof(vector<uint8_t> data, int index, string root, vector<string> branch);
     void print_proof();
-    bool validate();
+    bool validate() const;
     const vector<uint8_t> data();
     int index();
     const string& root_hash();

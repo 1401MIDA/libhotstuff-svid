@@ -45,8 +45,7 @@ HotStuffCore::HotStuffCore(ReplicaID id,
             if (RSE::init() != 0) {
                 throw std::runtime_error("leo_init failed.");
             }
-            LOG_PROTO("leo_init success.");
-        LOG_PROTO("%s", rse.print().c_str());
+            LOG_INFO("leo_init success.");
     storage->add_blk(b0);
 }
 
@@ -164,6 +163,7 @@ block_t HotStuffCore::on_propose(const std::vector<uint256_t> &cmds,
         throw std::runtime_error("empty parents");
     for (const auto &_: parents) tails.erase(_);
     /* create the new block */
+    // todo: cmds -> cmds.hash
     block_t bnew = storage->add_blk(
         new Block(parents, cmds,
             hqc.second->clone(), std::move(extra),
@@ -197,8 +197,8 @@ block_t HotStuffCore::on_propose(const std::vector<uint256_t> &cmds,
     LOG_PROTO("create %d proofs", proofs.size());
     std::vector<Proposal> props;
     for(auto proof: proofs) {
-        Slice slice(proof);
-        LOG_PROTO("slice %d <%s>", slice.m_index, std::string(slice).c_str());
+        Slice slice(proof, bnew_hash);
+        LOG_PROTO("create %s", std::string(slice).c_str());
         Proposal prop(id, slice, bnew, nullptr);
         props.emplace_back(prop);
     }
@@ -219,6 +219,13 @@ block_t HotStuffCore::on_propose(const std::vector<uint256_t> &cmds,
 
 void HotStuffCore::on_receive_proposal(const Proposal &prop) {
     LOG_PROTO("got %s", std::string(prop).c_str());
+    
+    assert(prop.s_hash == salticidae::get_hash(prop.slice));
+    assert(prop.slice.validate());
+    on_receive_slice(prop.slice);
+    do_broadcast_slice(prop.slice);
+    LOG_PROTO("broadcast %s", std::string(prop.slice).c_str());
+
     bool self_prop = prop.proposer == get_id();
     block_t bnew = prop.blk;
     if (!self_prop)
@@ -283,6 +290,16 @@ void HotStuffCore::on_receive_vote(const Vote &vote) {
         on_qc_finish(blk);
     }
 }
+
+void HotStuffCore::on_receive_slice(const Slice &slice) {
+    LOG_PROTO("got %s", std::string(slice).c_str());
+    if (slice.validate()==false)
+    {
+        LOG_WARN("Invalide Slice %s", std::string(slice).c_str());
+        return;
+    }
+}
+
 /*** end HotStuff protocol logic ***/
 void HotStuffCore::on_init(uint32_t nfaulty) {
     config.nmajority = config.nreplicas - nfaulty;
