@@ -21,6 +21,7 @@ public:
     int insert_shard(string hash, unsigned idx, vector<uint8_t> data);
     int get_block(string hash, vv_char& shards);
     int remove(string hash);
+    bool enough(string hash);
     string print();
 };
 

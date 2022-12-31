@@ -28,6 +28,25 @@
 
 namespace hotstuff {
 
+struct Commands {
+    std::vector<uint256_t> cmds;
+    Commands(const std::vector<uint256_t> &cmds): cmds(cmds) {}
+    
+    void serialize(DataStream &s) const {
+        s << htole((uint32_t)cmds.size());
+        for (auto cmd: cmds)
+            s << cmd;
+    }
+
+    void unserialize(DataStream &s) {
+        uint32_t n;
+        s >> n;
+        n = letoh(n);
+        cmds.resize(n);
+        for (auto &cmd: cmds)
+            s >> cmd;
+    }
+};
 /* The core logic of HotStuff, is fairly simple :). */
 /*** begin HotStuff protocol logic ***/
 HotStuffCore::HotStuffCore(ReplicaID id,
@@ -104,11 +123,55 @@ void HotStuffCore::update(const block_t &nblk) {
     if (blk2 == nullptr) return;
     /* decided blk could possible be incomplete due to pruning */
     if (blk2->decision) return;
+    string blk2_hash = get_hex((*blk2).get_hash());
+    if (!sc.enough(blk2_hash))
+    {
+        LOG_WARN("1-chain: No sufficient Slice for blk %s", blk2_hash.substr(0,10).c_str());
+        return;
+    }
+    LOG_PROTO("1-chain: Enough Slice for blk %s", blk2_hash.substr(0,10).c_str());
     update_hqc(blk2, nblk->qc);
 
     const block_t &blk1 = blk2->qc_ref;
     if (blk1 == nullptr) return;
     if (blk1->decision) return;
+    string blk1_hash = get_hex((*blk1).get_hash());
+    std::vector<std::vector<uint8_t>> decode_input;
+    // LOG_PROTO("2-chain: try get slices for blk %s", blk1_hash.substr(0,10).c_str());
+    if(sc.get_block(blk1_hash, decode_input)==0)
+    {
+        // LOG_PROTO("2-chain: get slices for blk %s", blk1_hash.substr(0,10).c_str());
+        std::vector<uint8_t> decode_output;
+        if(rse.decode(decode_input, decode_output)==0)
+        {
+            assert(decode_output.size()%32==0);
+            unsigned cmd_size = decode_output.size()/32;
+            // LOG_PROTO("2-chain: try to recover %d cmds for blk %s", cmd_size, blk1_hash.substr(0,10).c_str());
+            // std::vector<uint256_t> cmds;
+            // for(unsigned i=0; i<cmd_size; i++)
+            // {
+            //     std::vector<uint8_t> cmd(decode_output.begin()+i*32, decode_output.begin()+i*32+32);
+            //     uint256_t c;
+            //     c.from_bytes(cmd);
+            //     cmds.emplace_back(c);
+            // }
+            // Commands commands(cmds);
+            // Commands commands_origin(blk1->cmds);
+            // uint256_t cmd_hash = salticidae::get_hash(commands);
+            // uint256_t cmd_origin_hash = salticidae::get_hash(commands_origin);
+            // cmd_db.insert(std::make_pair(blk1_hash, cmds));
+            // assert(cmd_hash==cmd_origin_hash);
+            LOG_PROTO("2-chain: Decode %d cmds for blk %s", cmd_size, blk1_hash.substr(0,10).c_str());
+        }
+        else
+        {
+            LOG_WARN("2-chain: Failed to decode for blk %s", blk1_hash.substr(0,10).c_str());
+        }
+    }
+    else
+    {
+        LOG_WARN("2-chain: cannot get slices for blk %s", blk1_hash.substr(0,10).c_str());
+    }
     if (blk1->height > b_lock->height) b_lock = blk1;
 
     const block_t &blk = blk1->qc_ref;
@@ -117,6 +180,7 @@ void HotStuffCore::update(const block_t &nblk) {
 
     /* commit requires direct parent */
     if (blk2->parents[0] != blk1 || blk1->parents[0] != blk) return;
+    LOG_PROTO("3-chain %s", get_hex10((*blk).get_hash()).c_str());
 #else
     /* two-step HotStuff */
     const block_t &blk1 = nblk->qc_ref;
@@ -146,6 +210,18 @@ void HotStuffCore::update(const block_t &nblk) {
     for (auto it = commit_queue.rbegin(); it != commit_queue.rend(); it++)
     {
         const block_t &blk = *it;
+        // string blk_hash = get_hex(blk->get_hash());
+        // auto item = cmd_db.find(blk_hash);
+        // if (item != cmd_db.end()) 
+        // {
+        //     auto blk_cmds = item->second;
+        //     cmd_db.erase(blk_hash);
+        //     LOG_PROTO("find blk %s from cmds_db", get_hex10(blk->get_hash()).c_str());
+        // }
+        // else
+        // {
+        //     LOG_WARN("Cannot find blk %s from cmds_db", get_hex10(blk->get_hash()).c_str());
+        // }
         blk->decision = 1;
         do_consensus(blk);
         LOG_PROTO("commit %s", std::string(*blk).c_str());
@@ -194,7 +270,6 @@ block_t HotStuffCore::on_propose(const std::vector<uint256_t> &cmds,
 
     MerkleTree mt(encode_output);
     vector<MerkleProof> proofs = mt.proofs();
-    LOG_PROTO("create %d proofs", proofs.size());
     std::vector<Proposal> props;
     for(auto proof: proofs) {
         Slice slice(proof, bnew_hash);
@@ -298,6 +373,14 @@ void HotStuffCore::on_receive_slice(const Slice &slice) {
         LOG_WARN("Invalide Slice %s", std::string(slice).c_str());
         return;
     }
+    string blk_hash = get_hex(slice.m_blk_hash);
+    if (sc.insert_shard(blk_hash, slice.m_index, slice.m_data)!=0)
+    {
+        LOG_WARN("Repeated acceptance of Slice %s", std::string(slice).c_str());
+        return;
+    }
+    LOG_PROTO("sc insert %s", std::string(slice).c_str());
+
 }
 
 /*** end HotStuff protocol logic ***/

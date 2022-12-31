@@ -76,6 +76,7 @@ class HotStuffCore {
     BoxObj<EntityStorage> storage;
     RSE rse;
     ShardsContainer sc;
+    std::unordered_map<string, std::vector<uint256_t>> cmd_db;
 
     HotStuffCore(ReplicaID id, privkey_bt &&priv_key);
     virtual ~HotStuffCore() {

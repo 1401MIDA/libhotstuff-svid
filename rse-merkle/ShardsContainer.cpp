@@ -10,9 +10,6 @@ void ShardsContainer::set_pramas(unsigned node_num) {
 }
 
 int ShardsContainer::new_block(string hash) {
-    if(m_shards.count(hash) != 0) {
-        return -1;
-    }
     vv_char s(m_nodenum);
     pair<vv_char, unsigned> shards(s, 0);
     m_shards.insert(make_pair(hash, shards));
@@ -22,10 +19,10 @@ int ShardsContainer::new_block(string hash) {
 
 int ShardsContainer::insert_shard(string hash, unsigned idx, vector<uint8_t> data) {
     if(m_shards.count(hash) == 0) {
-        return -1;
+        new_block(hash);
     }
     if(m_shards[hash].first[idx].size() != 0) {
-        return -2;
+        return -1;
     }
     m_shards[hash].first[idx] = data;
     m_shards[hash].second++;
@@ -48,6 +45,16 @@ int ShardsContainer::remove(string hash) {
         return -1;
     }
     return 0;
+}
+
+bool ShardsContainer::enough(string hash) {
+    if(m_shards.count(hash) == 0) {
+        return false;
+    }
+    if(m_shards[hash].second < m_threshold) {
+        return false;
+    }
+    return true;
 }
 
 string ShardsContainer::print() {
