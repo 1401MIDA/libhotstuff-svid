@@ -147,6 +147,26 @@ int RSE::decode(const vector<vector<uint8_t>> &input, vector<uint8_t> &output) {
     }
     cout << "decode buffer_bytes= " << buffer_bytes << endl;
 
+    if(m_original_count+m_recovery_count==4)
+    {
+        if(input[3].size()==0)
+        {
+            uint64_t data_bytes;
+            uint64_t slice_bytes;     
+            memcpy(&data_bytes, input[0].data(), 8);
+            memcpy(&slice_bytes, input[0].data()+8, 8);
+            cout << "decode data_bytes= " << data_bytes << ", slice_bytes= " << slice_bytes << endl;
+
+            for (unsigned i = 0; i < m_original_count; ++i) {
+                output.insert(output.end(), input[i].begin(), input[i].begin()+slice_bytes);  
+            }
+
+            output.erase(output.begin(), output.begin()+16);
+            output.erase(output.begin()+data_bytes, output.end());
+            return 0;
+        }
+    }
+
     // Calculate decode_work_count
 
     unsigned decode_work_count = leo_decode_work_count(m_original_count, m_recovery_count);

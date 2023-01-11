@@ -20,6 +20,7 @@
 
 #include "hotstuff/util.h"
 #include "hotstuff/consensus.h"
+#include <iostream>
 
 #define LOG_INFO HOTSTUFF_LOG_INFO
 #define LOG_DEBUG HOTSTUFF_LOG_DEBUG
@@ -140,27 +141,25 @@ void HotStuffCore::update(const block_t &nblk) {
     // LOG_PROTO("2-chain: try get slices for blk %s", blk1_hash.substr(0,10).c_str());
     if(sc.get_block(blk1_hash, decode_input)==0)
     {
-        // LOG_PROTO("2-chain: get slices for blk %s", blk1_hash.substr(0,10).c_str());
         std::vector<uint8_t> decode_output;
         if(rse.decode(decode_input, decode_output)==0)
         {
             assert(decode_output.size()%32==0);
             unsigned cmd_size = decode_output.size()/32;
             // LOG_PROTO("2-chain: try to recover %d cmds for blk %s", cmd_size, blk1_hash.substr(0,10).c_str());
-            // std::vector<uint256_t> cmds;
-            // for(unsigned i=0; i<cmd_size; i++)
-            // {
-            //     std::vector<uint8_t> cmd(decode_output.begin()+i*32, decode_output.begin()+i*32+32);
-            //     uint256_t c;
-            //     c.from_bytes(cmd);
-            //     cmds.emplace_back(c);
-            // }
-            // Commands commands(cmds);
-            // Commands commands_origin(blk1->cmds);
-            // uint256_t cmd_hash = salticidae::get_hash(commands);
-            // uint256_t cmd_origin_hash = salticidae::get_hash(commands_origin);
-            // cmd_db.insert(std::make_pair(blk1_hash, cmds));
-            // assert(cmd_hash==cmd_origin_hash);
+            std::vector<uint256_t> cmds;
+            for(unsigned i=0; i<cmd_size; i++)
+            {
+                std::vector<uint8_t> cmd(decode_output.begin()+i*32, decode_output.begin()+i*32+32);
+                uint256_t c;
+                c.from_bytes(cmd);
+                cmds.emplace_back(c);
+            }
+            Commands commands(cmds);
+            uint256_t cmd_hash = salticidae::get_hash(commands);
+            uint256_t cmd_origin_hash = blk1->cmds[0];
+            assert(cmd_hash==cmd_origin_hash);
+            cmd_db.insert(std::make_pair(blk1_hash, cmds));
             LOG_PROTO("2-chain: Decode %d cmds for blk %s", cmd_size, blk1_hash.substr(0,10).c_str());
         }
         else
@@ -180,7 +179,6 @@ void HotStuffCore::update(const block_t &nblk) {
 
     /* commit requires direct parent */
     if (blk2->parents[0] != blk1 || blk1->parents[0] != blk) return;
-    LOG_PROTO("3-chain %s", get_hex10((*blk).get_hash()).c_str());
 #else
     /* two-step HotStuff */
     const block_t &blk1 = nblk->qc_ref;
@@ -210,24 +208,24 @@ void HotStuffCore::update(const block_t &nblk) {
     for (auto it = commit_queue.rbegin(); it != commit_queue.rend(); it++)
     {
         const block_t &blk = *it;
-        // string blk_hash = get_hex(blk->get_hash());
-        // auto item = cmd_db.find(blk_hash);
-        // if (item != cmd_db.end()) 
-        // {
-        //     auto blk_cmds = item->second;
-        //     cmd_db.erase(blk_hash);
-        //     LOG_PROTO("find blk %s from cmds_db", get_hex10(blk->get_hash()).c_str());
-        // }
-        // else
-        // {
-        //     LOG_WARN("Cannot find blk %s from cmds_db", get_hex10(blk->get_hash()).c_str());
-        // }
+        string blk_hash = get_hex(blk->get_hash());
         blk->decision = 1;
         do_consensus(blk);
-        LOG_PROTO("commit %s", std::string(*blk).c_str());
-        for (size_t i = 0; i < blk->cmds.size(); i++)
-            do_decide(Finality(id, 1, i, blk->height,
-                                blk->cmds[i], blk->get_hash()));
+        auto item = cmd_db.find(blk_hash);
+        if (item != cmd_db.end()) 
+        {
+            auto blk_cmds = item->second;
+            cmd_db.erase(blk_hash);
+            LOG_PROTO("3-chain: find blk %s from cmds_db", get_hex10(blk->get_hash()).c_str());
+            LOG_PROTO("commit %s", std::string(*blk).c_str());
+            for (size_t i = 0; i < blk_cmds.size(); i++)
+                do_decide(Finality(id, 1, i, blk->height,
+                                blk_cmds[i], blk->get_hash()));
+        }
+        else
+        {
+            LOG_WARN("3-chain: Cannot find blk %s from cmds_db", get_hex10(blk->get_hash()).c_str());
+        }
     }
     b_exec = blk;
 }
@@ -240,8 +238,10 @@ block_t HotStuffCore::on_propose(const std::vector<uint256_t> &cmds,
     for (const auto &_: parents) tails.erase(_);
     /* create the new block */
     // todo: cmds -> cmds.hash
+    Commands c(cmds);
+    std::vector<uint256_t> cmd_hash = {salticidae::get_hash(c)};
     block_t bnew = storage->add_blk(
-        new Block(parents, cmds,
+        new Block(parents, cmd_hash,
             hqc.second->clone(), std::move(extra),
             parents[0]->height + 1,
             hqc.first,
