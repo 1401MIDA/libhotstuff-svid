@@ -216,6 +216,7 @@ void HotStuffCore::update(const block_t &nblk) {
         {
             auto blk_cmds = item->second;
             cmd_db.erase(blk_hash);
+            sc.remove(blk_hash);
             LOG_PROTO("3-chain: find blk %s from cmds_db", get_hex10(blk->get_hash()).c_str());
             LOG_PROTO("commit %s", std::string(*blk).c_str());
             for (size_t i = 0; i < blk_cmds.size(); i++)

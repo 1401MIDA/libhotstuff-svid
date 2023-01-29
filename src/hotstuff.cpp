@@ -275,7 +275,12 @@ void HotStuffBase::slice_handler(MsgSlice &&msg, const Net::conn_t &conn) {
         LOG_WARN("invalid slice from %d", get_config().get_rid(peer));
         return;
     }
-    on_receive_slice(std::move(slice));
+
+    promise::all(std::vector<promise_t>{
+        promise_t([this, slice](promise_t &pm){ 
+            on_receive_slice(slice);
+            pm.resolve(true); })
+    });
 }
 
 bool HotStuffBase::conn_handler(const salticidae::ConnPool::conn_t &conn, bool connected) {
