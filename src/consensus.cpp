@@ -116,6 +116,32 @@ void HotStuffCore::update_hqc(const block_t &_hqc, const quorum_cert_bt &qc) {
     }
 }
 
+std::vector<uint256_t> async_decode(RSE rse, std::vector<std::vector<uint8_t>> decode_input){
+    std::vector<uint8_t> decode_output;
+    std::vector<uint256_t> cmds;
+    if(rse.decode(decode_input, decode_output)==0)
+    {
+        assert(decode_output.size()%32==0);
+        unsigned cmd_size = decode_output.size()/32;
+        // LOG_PROTO("2-chain: try to recover %d cmds for blk %s", cmd_size, blk1_hash.substr(0,10).c_str());
+        
+        for(unsigned i=0; i<cmd_size; i++)
+        {
+            std::vector<uint8_t> cmd(decode_output.begin()+i*32, decode_output.begin()+i*32+32);
+            uint256_t c;
+            c.from_bytes(cmd);
+            cmds.emplace_back(c);
+        }
+        // LOG_PROTO("2-chain: Decode %d cmds for blk %s", cmd_size, blk1_hash.substr(0,10).c_str());
+    }
+    else
+    {
+        // LOG_WARN("2-chain: Failed to decode for blk %s", blk1_hash.substr(0,10).c_str());
+    }
+    return cmds;
+}
+
+
 void HotStuffCore::update(const block_t &nblk) {
     /* nblk = b*, blk2 = b'', blk1 = b', blk = b */
 #ifndef HOTSTUFF_TWO_STEP
@@ -130,47 +156,19 @@ void HotStuffCore::update(const block_t &nblk) {
         LOG_WARN("1-chain: No sufficient Slice for blk %s", blk2_hash.substr(0,10).c_str());
         return;
     }
+    std::vector<std::vector<uint8_t>> decode_input;
+    if(sc.get_block(blk2_hash, decode_input)==0)
+    {
+        std::future<std::vector<uint256_t> > fu = std::async(async_decode, rse, decode_input);
+        futures.insert(std::make_pair(blk2_hash, fu.share()));
+    }
     LOG_PROTO("1-chain: Enough Slice for blk %s", blk2_hash.substr(0,10).c_str());
     update_hqc(blk2, nblk->qc);
 
     const block_t &blk1 = blk2->qc_ref;
     if (blk1 == nullptr) return;
     if (blk1->decision) return;
-    string blk1_hash = get_hex((*blk1).get_hash());
-    std::vector<std::vector<uint8_t>> decode_input;
-    // LOG_PROTO("2-chain: try get slices for blk %s", blk1_hash.substr(0,10).c_str());
-    if(sc.get_block(blk1_hash, decode_input)==0)
-    {
-        std::vector<uint8_t> decode_output;
-        if(rse.decode(decode_input, decode_output)==0)
-        {
-            assert(decode_output.size()%32==0);
-            unsigned cmd_size = decode_output.size()/32;
-            // LOG_PROTO("2-chain: try to recover %d cmds for blk %s", cmd_size, blk1_hash.substr(0,10).c_str());
-            std::vector<uint256_t> cmds;
-            for(unsigned i=0; i<cmd_size; i++)
-            {
-                std::vector<uint8_t> cmd(decode_output.begin()+i*32, decode_output.begin()+i*32+32);
-                uint256_t c;
-                c.from_bytes(cmd);
-                cmds.emplace_back(c);
-            }
-            Commands commands(cmds);
-            uint256_t cmd_hash = salticidae::get_hash(commands);
-            uint256_t cmd_origin_hash = blk1->cmds[0];
-            assert(cmd_hash==cmd_origin_hash);
-            cmd_db.insert(std::make_pair(blk1_hash, cmds));
-            LOG_PROTO("2-chain: Decode %d cmds for blk %s", cmd_size, blk1_hash.substr(0,10).c_str());
-        }
-        else
-        {
-            LOG_WARN("2-chain: Failed to decode for blk %s", blk1_hash.substr(0,10).c_str());
-        }
-    }
-    else
-    {
-        LOG_WARN("2-chain: cannot get slices for blk %s", blk1_hash.substr(0,10).c_str());
-    }
+    
     if (blk1->height > b_lock->height) b_lock = blk1;
 
     const block_t &blk = blk1->qc_ref;
@@ -211,11 +209,12 @@ void HotStuffCore::update(const block_t &nblk) {
         string blk_hash = get_hex(blk->get_hash());
         blk->decision = 1;
         do_consensus(blk);
-        auto item = cmd_db.find(blk_hash);
-        if (item != cmd_db.end()) 
+        auto item = futures.find(blk_hash);
+        if (item != futures.end()) 
         {
-            auto blk_cmds = item->second;
-            cmd_db.erase(blk_hash);
+            auto fu = item->second;
+            auto blk_cmds = fu.get();
+            futures.erase(blk_hash);
             sc.remove(blk_hash);
             LOG_PROTO("3-chain: find blk %s from cmds_db", get_hex10(blk->get_hash()).c_str());
             LOG_PROTO("commit %s", std::string(*blk).c_str());

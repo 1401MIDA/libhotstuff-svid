@@ -79,6 +79,7 @@ class HotStuffCore {
     RSE rse;
     ShardsContainer sc;
     std::unordered_map<string, std::vector<uint256_t>> cmd_db;
+    std::unordered_map<string, std::shared_future<std::vector<uint256_t> > > futures;
 
 
     HotStuffCore(ReplicaID id, privkey_bt &&priv_key);
