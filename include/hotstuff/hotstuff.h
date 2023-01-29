@@ -88,7 +88,7 @@ struct MsgSlice {
     void postponed_parse();
 };
 
-using promise::promise_t;
+using mypromise::promise_t;
 
 class HotStuffBase;
 using pacemaker_bt = BoxObj<class PaceMaker>;

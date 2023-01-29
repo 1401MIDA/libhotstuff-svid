@@ -196,8 +196,8 @@ promise_t HotStuffBase::async_deliver_blk(const uint256_t &blk_hash,
         /* the parents should be delivered */
         for (const auto &phash: blk->get_parent_hashes())
             pms.push_back(async_deliver_blk(phash, replica));
-        promise::all(pms).then([this, blk](const promise::values_t values) {
-            auto ret = promise::any_cast<bool>(values[0]) && this->on_deliver_blk(blk);
+        mypromise::all(pms).then([this, blk](const mypromise::values_t values) {
+            auto ret = mypromise::any_cast<bool>(values[0]) && this->on_deliver_blk(blk);
             if (!ret)
                 HOTSTUFF_LOG_WARN("verification failed during async delivery");
         });
@@ -217,7 +217,7 @@ void HotStuffBase::propose_handler(MsgPropose &&msg, const Net::conn_t &conn) {
         LOG_WARN("invalid proposal from %d", prop.proposer);
         return;
     }
-    promise::all(std::vector<promise_t>{
+    mypromise::all(std::vector<promise_t>{
         async_deliver_blk(blk->get_hash(), peer)
     }).then([this, prop = std::move(prop)]() {
         on_receive_proposal(prop);
@@ -230,11 +230,11 @@ void HotStuffBase::vote_handler(MsgVote &&msg, const Net::conn_t &conn) {
     msg.postponed_parse(this);
     //auto &vote = msg.vote;
     RcObj<Vote> v(new Vote(std::move(msg.vote)));
-    promise::all(std::vector<promise_t>{
+    mypromise::all(std::vector<promise_t>{
         async_deliver_blk(v->blk_hash, peer),
         v->verify(vpool),
-    }).then([this, v=std::move(v)](const promise::values_t values) {
-        if (!promise::any_cast<bool>(values[1]))
+    }).then([this, v=std::move(v)](const mypromise::values_t values) {
+        if (!mypromise::any_cast<bool>(values[1]))
             LOG_WARN("invalid vote from %d", v->voter);
         else
             on_receive_vote(*v);
@@ -248,11 +248,11 @@ void HotStuffBase::req_blk_handler(MsgReqBlock &&msg, const Net::conn_t &conn) {
     std::vector<promise_t> pms;
     for (const auto &h: blk_hashes)
         pms.push_back(async_fetch_blk(h, nullptr));
-    promise::all(pms).then([replica, this](const promise::values_t values) {
+    mypromise::all(pms).then([replica, this](const mypromise::values_t values) {
         std::vector<block_t> blks;
         for (auto &v: values)
         {
-            auto blk = promise::any_cast<block_t>(v);
+            auto blk = mypromise::any_cast<block_t>(v);
             blks.push_back(blk);
         }
         pn.send_msg(MsgRespBlock(blks), replica);
@@ -276,7 +276,7 @@ void HotStuffBase::slice_handler(MsgSlice &&msg, const Net::conn_t &conn) {
         return;
     }
 
-    promise::all(std::vector<promise_t>{
+    mypromise::all(std::vector<promise_t>{
         promise_t([this, slice](promise_t &pm){ 
             on_receive_slice(slice);
             pm.resolve(true); })

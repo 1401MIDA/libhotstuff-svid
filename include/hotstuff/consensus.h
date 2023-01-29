@@ -21,6 +21,7 @@
 #include <cassert>
 #include <set>
 #include <unordered_map>
+#include <future>
 
 #include "rse-merkle/RSE.h"
 #include "rse-merkle/MerkleTree.h"
@@ -37,6 +38,7 @@ struct Slice;
 struct Proposal;
 struct Vote;
 struct Finality;
+struct Commands;
 
 /** Abstraction for HotStuff protocol state machine (without network implementation). */
 class HotStuffCore {
@@ -77,6 +79,7 @@ class HotStuffCore {
     RSE rse;
     ShardsContainer sc;
     std::unordered_map<string, std::vector<uint256_t>> cmd_db;
+
 
     HotStuffCore(ReplicaID id, privkey_bt &&priv_key);
     virtual ~HotStuffCore() {

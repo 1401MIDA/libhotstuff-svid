@@ -47,7 +47,7 @@ using salticidae::PeerId;
 using salticidae::TimerEvent;
 using salticidae::FdEvent;
 using salticidae::EventContext;
-using promise::promise_t;
+using mypromise::promise_t;
 
 class HotStuffError: public salticidae::SalticidaeError {
     public:

@@ -56,9 +56,9 @@ promise_t QuorumCertSecp256k1::verify(const ReplicaConfig &config, VeriPool &vpo
                             static_cast<const PubKeySecp256k1 &>(config.get_pubkey(i)),
                             sigs[i])));
         }
-    return promise::all(vpm).then([](const promise::values_t &values) {
+    return mypromise::all(vpm).then([](const mypromise::values_t &values) {
         for (const auto &v: values)
-            if (!promise::any_cast<bool>(v)) return false;
+            if (!mypromise::any_cast<bool>(v)) return false;
         return true;
     });
 }

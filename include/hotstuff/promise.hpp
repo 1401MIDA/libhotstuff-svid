@@ -49,7 +49,7 @@
  * Implement type-safe Promise primitives similar to the ones specified by
  * Javascript Promise/A+.
  */
-namespace promise {
+namespace mypromise {
 #ifdef _CPPROMISE_STD_ANY
     using pm_any_t = std::any;
     template<typename T>
