@@ -147,25 +147,29 @@ int RSE::decode(const vector<vector<uint8_t>> &input, vector<uint8_t> &output) {
     }
     cout << "decode buffer_bytes= " << buffer_bytes << endl;
 
-    if(m_original_count+m_recovery_count==4)
+    unsigned lost_index = 0;
+    uint64_t data_bytes;
+    uint64_t slice_bytes;
+
+    if(input[0].size() != 0)
     {
-        if(input[3].size()==0)
+        memcpy(&data_bytes, input[0].data(), 8);
+        memcpy(&slice_bytes, input[0].data()+8, 8);
+        cout << "decode data_bytes= " << data_bytes << ", slice_bytes= " << slice_bytes << endl;
+
+        for (; lost_index < m_original_count; ++lost_index) {
+            if(input[lost_index].size()==0)
+                break;
+            output.insert(output.end(), input[lost_index].begin(), input[lost_index].begin()+slice_bytes);  
+        }
+        if(lost_index==m_original_count)
         {
-            uint64_t data_bytes;
-            uint64_t slice_bytes;     
-            memcpy(&data_bytes, input[0].data(), 8);
-            memcpy(&slice_bytes, input[0].data()+8, 8);
-            cout << "decode data_bytes= " << data_bytes << ", slice_bytes= " << slice_bytes << endl;
-
-            for (unsigned i = 0; i < m_original_count; ++i) {
-                output.insert(output.end(), input[i].begin(), input[i].begin()+slice_bytes);  
-            }
-
             output.erase(output.begin(), output.begin()+16);
             output.erase(output.begin()+data_bytes, output.end());
             return 0;
         }
     }
+
 
     // Calculate decode_work_count
 
@@ -222,27 +226,20 @@ int RSE::decode(const vector<vector<uint8_t>> &input, vector<uint8_t> &output) {
         return d_rst;
     }
 
-    uint64_t data_bytes;
-    uint64_t slice_bytes;
     if (input[0].size() == 0) {
         memcpy(&data_bytes, decode_work_data[0], 8);
         memcpy(&slice_bytes, decode_work_data[0]+8, 8);
-    }
-    else {
-        memcpy(&data_bytes, input[0].data(), 8);
-        memcpy(&slice_bytes, input[0].data()+8, 8);
+        cout << "decode data_bytes= " << data_bytes << ", slice_bytes= " << slice_bytes << endl;
     }
 
-    cout << "decode data_bytes= " << data_bytes << ", slice_bytes= " << slice_bytes << endl;
 
-
-    for (unsigned i = 0; i < m_original_count; ++i) {
-        if (input[i].size() == 0) {
-            vector<uint8_t> tmp((uint8_t *)decode_work_data[i], (uint8_t *)decode_work_data[i]+slice_bytes);
+    for (; lost_index < m_original_count; ++lost_index) {
+        if (input[lost_index].size() == 0) {
+            vector<uint8_t> tmp((uint8_t *)decode_work_data[lost_index], (uint8_t *)decode_work_data[lost_index]+slice_bytes);
             output.insert(output.end(), tmp.begin(), tmp.end());
         }
         else {
-            output.insert(output.end(), input[i].begin(), input[i].begin()+slice_bytes);
+            output.insert(output.end(), input[lost_index].begin(), input[lost_index].begin()+slice_bytes);
         }
     }
 
