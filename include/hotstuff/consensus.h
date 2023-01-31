@@ -39,6 +39,8 @@ struct Proposal;
 struct Vote;
 struct Finality;
 struct Commands;
+struct Shard;
+
 
 /** Abstraction for HotStuff protocol state machine (without network implementation). */
 class HotStuffCore {
@@ -80,6 +82,7 @@ class HotStuffCore {
     ShardsContainer sc;
     std::unordered_map<string, std::vector<uint256_t>> cmd_db;
     std::unordered_map<string, std::shared_future<std::vector<uint256_t> > > futures;
+    std::map<string, std::vector<std::shared_future<Shard> > > v_futures;
 
 
     HotStuffCore(ReplicaID id, privkey_bt &&priv_key);
@@ -183,6 +186,15 @@ class HotStuffCore {
     operator std::string () const;
     void set_vote_disabled(bool f) { vote_disabled = f; }
 };
+
+
+struct Shard {
+    unsigned index;
+    std::vector<uint8_t> data;
+
+    Shard(unsigned index, std::vector<uint8_t> data): index(index), data(data){}
+};
+
 
 struct Slice: public MerkleProof {
     uint256_t m_blk_hash;

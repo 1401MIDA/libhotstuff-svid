@@ -151,6 +151,11 @@ void HotStuffCore::update(const block_t &nblk) {
     /* decided blk could possible be incomplete due to pruning */
     if (blk2->decision) return;
     string blk2_hash = get_hex((*blk2).get_hash());
+    for(auto fu: v_futures[blk2_hash])
+    {
+        auto shard = fu.get();
+        sc.insert_shard(blk2_hash, shard.index, shard.data);
+    }
     if (!sc.enough(blk2_hash))
     {
         LOG_WARN("1-chain: No sufficient Slice for blk %s", blk2_hash.substr(0,10).c_str());
@@ -162,6 +167,7 @@ void HotStuffCore::update(const block_t &nblk) {
         std::future<std::vector<uint256_t> > fu = std::async(async_decode, rse, decode_input);
         futures.insert(std::make_pair(blk2_hash, fu.share()));
     }
+    v_futures.erase(blk2_hash);
     LOG_PROTO("1-chain: Enough Slice for blk %s", blk2_hash.substr(0,10).c_str());
     update_hqc(blk2, nblk->qc);
 
@@ -366,21 +372,23 @@ void HotStuffCore::on_receive_vote(const Vote &vote) {
     }
 }
 
+Shard async_validate(Slice slice){
+    std::vector<uint8_t> data;
+    if(slice.validate())
+        data = slice.data();
+    return Shard(slice.index(), data);
+}
+
 void HotStuffCore::on_receive_slice(const Slice &slice) {
     LOG_PROTO("got %s", std::string(slice).c_str());
-    if (slice.validate()==false)
-    {
-        LOG_WARN("Invalide Slice %s", std::string(slice).c_str());
-        return;
-    }
     string blk_hash = get_hex(slice.m_blk_hash);
-    if (sc.insert_shard(blk_hash, slice.m_index, slice.m_data)!=0)
+    if(v_futures.count(blk_hash)==0)
     {
-        LOG_WARN("Repeated acceptance of Slice %s", std::string(slice).c_str());
-        return;
+        std::vector<std::shared_future<Shard> > fus;
+        v_futures.insert(std::make_pair(blk_hash, fus));
     }
-    LOG_PROTO("sc insert %s", std::string(slice).c_str());
-
+    std::future<Shard> fu = std::async(async_validate, slice);
+    v_futures[blk_hash].push_back(fu.share());
 }
 
 /*** end HotStuff protocol logic ***/
