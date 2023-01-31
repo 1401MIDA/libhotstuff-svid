@@ -292,6 +292,51 @@ block_t HotStuffCore::on_propose(const std::vector<uint256_t> &cmds,
     return bnew;
 }
 
+
+block_t HotStuffCore::on_propose_async_blk(const NewBlk &new_blk,
+                            const std::vector<block_t> &parents,
+                            bytearray_t &&extra) {
+    if (parents.empty())
+        throw std::runtime_error("empty parents");
+    for (const auto &_: parents) tails.erase(_);
+    /* create the new block */
+    // todo: cmds -> cmds.hash
+    std::vector<uint256_t> cmd_hash;
+    block_t bnew = storage->add_blk(
+        new Block(parents, cmd_hash,
+            hqc.second->clone(), std::move(extra),
+            parents[0]->height + 1,
+            hqc.first,
+            nullptr
+        ));
+    const uint256_t bnew_hash = bnew->get_hash();
+    bnew->self_qc = create_quorum_cert(bnew_hash);
+    on_deliver_blk(bnew);
+    update(bnew);
+    
+    
+    std::vector<Proposal> props;
+    for(auto proof: new_blk.proofs) {
+        Slice slice(proof, bnew_hash);
+        LOG_PROTO("create %s", std::string(slice).c_str());
+        Proposal prop(id, slice, bnew, nullptr);
+        props.emplace_back(prop);
+    }
+    // Slice slice(proofs[1]);
+    // Proposal prop(id, slice, bnew, nullptr);
+    LOG_PROTO("propose %s", std::string(*bnew).c_str());
+    if (bnew->height <= vheight)
+        throw std::runtime_error("new block should be higher than vheight");
+    /* self-receive the proposal (no need to send it through the network) */
+    on_receive_proposal(props[get_id()]);
+    on_propose_(props[get_id()]);
+    /* boradcast to other replicas */
+    // do_broadcast_proposal(prop);
+    do_broadcast_proposal_with_slice(props);
+    
+    return bnew;
+}
+
 void HotStuffCore::on_receive_proposal(const Proposal &prop) {
     LOG_PROTO("got %s", std::string(prop).c_str());
     

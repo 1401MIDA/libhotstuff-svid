@@ -28,6 +28,9 @@
 #include "hotstuff/util.h"
 #include "hotstuff/consensus.h"
 
+#include "rse-merkle/RSE.h"
+#include "rse-merkle/MerkleTree.h"
+
 namespace hotstuff {
 
 using salticidae::PeerNetwork;
@@ -142,6 +145,7 @@ class HotStuffBase: public HotStuffCore {
     public:
     using Net = PeerNetwork<opcode_t>;
     using commit_cb_t = std::function<void(const Finality &)>;
+    std::queue<NewBlk> blk_queue;
 
     protected:
     /** the binding address in replica network */

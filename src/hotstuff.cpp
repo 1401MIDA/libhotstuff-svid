@@ -453,6 +453,24 @@ void HotStuffBase::do_decide(Finality &&fin) {
 
 HotStuffBase::~HotStuffBase() {}
 
+void async_encode(RSE rse, std::vector<uint256_t> cmds, std::queue<NewBlk> &blk_queue){
+    vector<uint8_t> encode_input;
+    vector<uint8_t> tmp;
+    for(size_t i = 0; i < cmds.size(); i++){
+        tmp = cmds[i].to_bytes();
+        encode_input.insert(encode_input.end(), tmp.begin(), tmp.end());
+    }    
+    // Encode
+
+    vector<vector<uint8_t>> encode_output;
+    if (rse.encode(encode_input, encode_output) != 0) {
+        throw std::runtime_error("encode error");
+    }
+
+    MerkleTree mt(encode_output);
+    blk_queue.push(NewBlk(mt.proofs()));
+}
+
 void HotStuffBase::start(
         std::vector<std::tuple<NetAddr, pubkey_bt, uint256_t>> &&replicas,
         bool ec_loop) {
@@ -508,9 +526,14 @@ void HotStuffBase::start(
                     cmds.push_back(cmd_pending_buffer.front());
                     cmd_pending_buffer.pop();
                 }
-                pmaker->beat().then([this, cmds = std::move(cmds)](ReplicaID proposer) {
+                std::future<void> fu = std::async(async_encode, rse,cmds, std::ref(blk_queue));
+            }
+            if(blk_queue.size()>0){
+                NewBlk new_blk = blk_queue.front();
+                blk_queue.pop();
+                pmaker->beat().then([this, new_blk = std::move(new_blk)](ReplicaID proposer) {
                     if (proposer == get_id())
-                        on_propose(cmds, pmaker->get_parents());
+                        on_propose_async_blk(new_blk, pmaker->get_parents());
                 });
                 return true;
             }

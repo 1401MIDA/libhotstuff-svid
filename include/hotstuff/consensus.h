@@ -40,6 +40,12 @@ struct Vote;
 struct Finality;
 struct Commands;
 
+struct NewBlk {
+    vector<MerkleProof> proofs;
+
+    NewBlk(vector<MerkleProof> proofs):proofs(proofs){}
+};
+
 /** Abstraction for HotStuff protocol state machine (without network implementation). */
 class HotStuffCore {
     block_t b0;                                  /** the genesis block */
@@ -118,6 +124,10 @@ class HotStuffCore {
      * contain at least one block, and the first block is the actual parent,
      * while the others are uncles/aunts */
     block_t on_propose(const std::vector<uint256_t> &cmds,
+                    const std::vector<block_t> &parents,
+                    bytearray_t &&extra = bytearray_t());
+
+    block_t on_propose_async_blk(const NewBlk &new_blk,
                     const std::vector<block_t> &parents,
                     bytearray_t &&extra = bytearray_t());
 
