@@ -151,23 +151,24 @@ void HotStuffCore::update(const block_t &nblk) {
     /* decided blk could possible be incomplete due to pruning */
     if (blk2->decision) return;
     string blk2_hash = get_hex((*blk2).get_hash());
-    if (!sc.enough(blk2_hash))
-    {
-        LOG_WARN("1-chain: No sufficient Slice for blk %s", blk2_hash.substr(0,10).c_str());
-        return;
-    }
-    std::vector<std::vector<uint8_t>> decode_input;
-    if(sc.get_block(blk2_hash, decode_input)==0)
-    {
-        std::future<std::vector<uint256_t> > fu = std::async(async_decode, rse, decode_input);
-        futures.insert(std::make_pair(blk2_hash, fu.share()));
-    }
-    LOG_PROTO("1-chain: Enough Slice for blk %s", blk2_hash.substr(0,10).c_str());
+    
     update_hqc(blk2, nblk->qc);
 
     const block_t &blk1 = blk2->qc_ref;
     if (blk1 == nullptr) return;
     if (blk1->decision) return;
+
+    string blk1_hash = get_hex((*blk1).get_hash());
+    if (!sc.enough(blk1_hash))
+    {
+        LOG_WARN("1-chain: No sufficient Slice for blk %s", blk1_hash.substr(0,10).c_str());
+    }
+    std::vector<std::vector<uint8_t>> decode_input;
+    if(sc.get_block(blk1_hash, decode_input)==0)
+    {
+        std::future<std::vector<uint256_t> > fu = std::async(async_decode, rse, decode_input);
+        futures.insert(std::make_pair(blk1_hash, fu.share()));
+    }
     
     if (blk1->height > b_lock->height) b_lock = blk1;
 
